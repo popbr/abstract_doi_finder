@@ -302,7 +302,7 @@ public class AbstractDoiFinder {
    public static XSSFWorkbook ShiftColumns(XSSFWorkbook wb) throws Exception {
       int startingSheet = 0; // This is bad practise: We're assuming that the sheets starting with the 0 (included) needs to be shifted
       int abstractColumn = 0, doiColumn = 0, meshColumn = 0; // Initializing the values for the columns, it throws an error otherwise. (title should be part of the general format, although it will most likely be there anyway)
-      boolean hasAbstractColumn = false, hasDOIColumn = false, hasMeshColumn, hasTitle = false; // If the sheet has a column, we do not want to add another one of the same type
+      boolean hasAbstractColumn = false, hasDOIColumn = false, hasMeshColumn = false, hasTitle = false; // If the sheet has a column, we do not want to add another one of the same type
 
       /* 
         Loops through every sheet of the workbook to see if an abstract or doi column already exists.
@@ -350,7 +350,7 @@ public class AbstractDoiFinder {
                   hasAbstractColumn = true;
                if (cellValue.toLowerCase().equals("doi") || cellValue.toLowerCase().equals("dois"))
                   hasDOIColumn = true;
-               if (cellValue.toLowerCase().equals("mesh") || cellValue.toLowerCase().equals("mesh terms"));
+               if (cellValue.toLowerCase().equals("mesh") || cellValue.toLowerCase().equals("mesh terms"))
                   hasMeshColumn = true;
             }
          }
@@ -361,6 +361,7 @@ public class AbstractDoiFinder {
                sheet.shiftColumns(abstractColumn, noOfColumns, 1);
                sheet.getRow(0).createCell(abstractColumn, CellType.STRING).setCellStyle(sheet.getRow(0).getCell(0).getCellStyle()); // creates the cell with the specified cell style
                sheet.getRow(0).getCell(abstractColumn).setCellValue("Abstract"); // Then we add the desired attribute name to the cell
+               noOfColumns = sheet.getRow(0).getPhysicalNumberOfCells(); // updates how many columns the sheet actually has
                System.out.println("An abstract column has been inserted for the sheet " + sheet.getSheetName() + " since it had a title column.");
             }
             else if (Boolean.FALSE.equals(hasAbstractColumn)) // if the cell is empty or "blank", then it would just create an abstract column instead.
@@ -377,6 +378,7 @@ public class AbstractDoiFinder {
                sheet.shiftColumns(doiColumn, noOfColumns, 1);
                sheet.getRow(0).createCell(doiColumn, CellType.STRING).setCellStyle(sheet.getRow(0).getCell(0).getCellStyle()); // creates the cell with the specified cell style
                sheet.getRow(0).getCell(doiColumn).setCellValue("DOI"); // Then we add the desired attribute name to the cell
+               noOfColumns = sheet.getRow(0).getPhysicalNumberOfCells(); // updates how many columns the sheet actually has
                System.out.println("A DOI column has been inserted for the sheet " + sheet.getSheetName() + " since it had a title column.");
             }
             else if (Boolean.FALSE.equals(hasDOIColumn)) // if the cell is empty, but has a title without the DOI, we insert it in the blank spot.
@@ -389,20 +391,22 @@ public class AbstractDoiFinder {
                System.out.println("A DOI column already existed for the " + sheet.getSheetName() + " sheet.");
             if (Boolean.FALSE.equals(hasMeshColumn) && sheet.getRow(0).getCell(meshColumn) != null && sheet.getRow(0).getCell(meshColumn).getCellType() != CellType.BLANK)
             {
+               // if a cell already exists for the DOI column slot, we shift over.
                sheet.shiftColumns(meshColumn, noOfColumns, 1);
-               sheet.getRow(0).createCell(meshColumn, CellType.STRING).setCellStyle(sheet.getRow(0).getCell(0).getCellStyle());
-               sheet.getRow(0).getCell(meshColumn).setCellValue("Mesh Terms"); // Add desired attribute name, generic label for our program "Mesh Terms"
-               System.out.println("A Mesh Terms column has been inserted for the sheet " + sheet.getSheetName() + " since it had a title column");
+               sheet.getRow(0).createCell(meshColumn, CellType.STRING).setCellStyle(sheet.getRow(0).getCell(0).getCellStyle()); // creates the cell with the specified cell style
+               sheet.getRow(0).getCell(meshColumn).setCellValue("Mesh Terms"); // Then we add the desired attribute name to the cell
+               noOfColumns = sheet.getRow(0).getPhysicalNumberOfCells(); // updates how many columns the sheet actually has
+               System.out.println("A Mesh Terms column has been inserted for the sheet " + sheet.getSheetName() + " since it had a title column.");
             }
-            else if (Boolean.FALSE.equals(hasMeshColumn))
+            else if (Boolean.FALSE.equals(hasMeshColumn)) // if the cell is empty, but has a title without the DOI, we insert it in the blank spot.
             {
                sheet.getRow(0).createCell(meshColumn, CellType.STRING).setCellStyle(sheet.getRow(0).getCell(0).getCellStyle());
-               sheet.getRow(0).getCell(meshColumn).setCellValue("Mesh Terms"); // Add desired attribute name, generic label for our program "Mesh Terms"
-               System.out.println("A Mesh Terms column has been inserted for the sheet " + sheet.getSheetName() + " since it had a title column");
+               sheet.getRow(0).getCell(meshColumn).setCellValue("Mesh Terms");
+               System.out.println("A Mesh Terms column has been inserted for the sheet " + sheet.getSheetName() + " since it had a title column.");
             }
             else
                System.out.println("A Mesh Terms column already existed for the " + sheet.getSheetName() + " sheet.");
-         }  
+      }  
       }
       return wb;
    }
@@ -582,7 +586,8 @@ public class AbstractDoiFinder {
          e.printStackTrace();
       }
       int count = 0, doiCount = 0, meshCount = 0;
-      for (int k = 0; k < abstractList.size(); k++)
+      int size = Math.min(abstractList.size(), Math.min(doiList.size(), meshList.size())); 
+      for (int k = 0; k < size; k++)
       {
          if (abstractList.get(k).toLowerCase().equals("no abstract on pubmed"))
             count++;
@@ -757,6 +762,7 @@ public class AbstractDoiFinder {
          // May need to rerun since this is often caused by connection issues
          int rows = abstractList.size(); // SocketTimeoutException causing it to not work in some cases
          int doiRows = doiList.size();
+         int meshRows = meshList.size();
          int cols = sheet.getRow(0).getLastCellNum(); //gets the number of columns in the sheet
          
          XSSFRow row = sheet.getRow(0);
@@ -797,12 +803,19 @@ public class AbstractDoiFinder {
                   }
                   if (valueOfCell.toLowerCase().equals("mesh") || valueOfCell.toLowerCase().equals("mesh terms"))
                   {
-                     for (int k = 1; k <= rows; k++) {
+                     for (int k = 1; k <= meshRows; k++) {
                         int meshIndex = k - 1;
                         row = sheet.getRow(k);
                         if (meshList.get(meshIndex).toLowerCase().equals("skip when writing"))
                            continue;
-                        row.createCell(i, CellType.STRING).setCellValue(meshList.get(meshIndex));
+
+                        String meshText = meshList.get(meshIndex);
+                        if (meshText.length() > 32767) // if it cannot be inserted into one cell
+                        {
+                           System.out.println("Reducing the size of mesh terms for row " + k);
+                           meshText = meshText.substring(0, 32767);
+                        }
+                        row.createCell(i, CellType.STRING).setCellValue(meshText);
                      }
                      row = sheet.getRow(0);
                   }
